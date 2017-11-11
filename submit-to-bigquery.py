@@ -14,6 +14,7 @@ from googleapiclient.errors import HttpError
 from oauth2client.client import GoogleCredentials
 
 NUM_FILES = 576
+TOTAL_COUNT = 27000000000
 SUBMIT_THRESHOLD = 10000
 ERROR_RETRY_DELAY = 5
 
@@ -36,18 +37,20 @@ def handle_file(member, contents, bq_data):
     user = member.split(".")[0]
     with gzip.GzipFile(fileobj=comp, mode='rb') as f:
         for line in f.readlines():
+            line = line.strip()
             cols = line.decode('ascii').split('\t')
-            data = {
-                'listened_at' : cols[0],
-                'user_name' : user,
-                'artist_mbid' : cols[1],
-                'release_mbid' : cols[2],
-                'recording_mbid' : cols[3]
-            }
-            bq_data.append({
-                'json': data,
-                'insertId': "%s-%s-%s" % (data['user_name'], data['listened_at'], data['recording_mbid'])
-            })
+            if len(cols) == 4 and cols[3]:
+                data = {
+                    'listened_at' : cols[0],
+                    'user_name' : user,
+                    'artist_mbid' : cols[1],
+                    'release_mbid' : cols[2],
+                    'recording_mbid' : cols[3]
+                }
+                bq_data.append({
+                    'json': data,
+                    'insertId': "%s-%s-%s" % (data['user_name'], data['listened_at'], data['recording_mbid'])
+                })
 
 def submit(bigquery, bq_data):
     body = { 'rows' : bq_data }
@@ -102,7 +105,7 @@ def import_tars(dir):
                 bq_data = bq_data[SUBMIT_THRESHOLD:]
 
             if time() - last_update > 10.0:
-                print("file %d of %d: total %s, %s row/sec" % (index, NUM_FILES, "{:,}".format(total), "{:,}".format(int(last_update_count / (time() - last_update)))))
+                print("file %d of %d: total %s, %s row/sec, %.2f%% complete" % (index, NUM_FILES, "{:,}".format(total), "{:,}".format(int(last_update_count / (time() - last_update))), total / TOTAL_COUNT))
                 last_update_count = 0
                 last_update = time()
 
