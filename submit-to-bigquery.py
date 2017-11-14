@@ -100,7 +100,7 @@ class FileImporter(Thread):
         bq_data = []
         path = os.path.join(self.dir, "MLHD_%03d.tar" % self.file_index)
         tar = tarfile.open(path)
-        for member in tar.getnames():
+        for i, member in enumerate(tar.getnames()):
             self.handle_file(member, tar.extractfile(member).read(), bq_data)
             while len(bq_data) > SUBMIT_THRESHOLD:
                 count = self.submit(bigquery, bq_data[:SUBMIT_THRESHOLD])
@@ -109,11 +109,12 @@ class FileImporter(Thread):
 
         tar.close()
 
-        submit(bigquery, bq_data)
-        self.is_done = True
+        self.submit(bigquery, bq_data)
+        self.done = True
+        print("file %s complete." % self.file_index)
 
 
-NUM_THREADS = 10
+NUM_THREADS = 25
 total = 0
 lock = Lock()
 
