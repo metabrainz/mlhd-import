@@ -10,6 +10,10 @@ import lzma
 from time import time
 
 import click
+import avro.schema
+from avro.datafile import DataFileReader, DataFileWriter
+from avro.io import DatumReader, DatumWriter
+
 
 UPDATE_INTERVAL = 3
 verbose = 1
@@ -23,7 +27,7 @@ def handle_file(member, contents):
     comp.write(contents)
     comp.seek(0)
 
-    output = ""
+    output = []
     count = 0
     user = member.split(".")[0]
     with gzip.GzipFile(fileobj=comp, mode='rb') as f:
@@ -31,36 +35,38 @@ def handle_file(member, contents):
             line = line.strip()
             cols = line.decode('ascii').split('\t')
             if len(cols) == 4 and cols[3]:
-                output += ujson.dumps({
-                    'listened_at' : cols[0],
+                output.append({
+                    'listened_at' : int(cols[0]),
                     'user_name' : user,
                     'artist_mbid' : cols[1],
                     'release_mbid' : cols[2],
                     'recording_mbid' : cols[3]
                 })
-                output += "\n"
                 count += 1
 
 
     return count, output
 
 @click.command()
+@click.argument('schema')
 @click.argument('src')
 @click.argument('dest')
 @click.argument('index')
 @click.argument('debug')
-def import_data(src, dest, index, debug):
+def import_data(schema, src, dest, index, debug):
     global next_update
     global verbose
 
     index = int(index)
     verbose = int(debug)
     in_file = os.path.join(src, "MLHD_%03d.tar" % index)
-    out_file = os.path.join(dest, "MLHD_%03d.json.xz" % index)
+    out_file = os.path.join(dest, "MLHD_%03d.avro" % index)
     count = 0
     next_update = time() + UPDATE_INTERVAL
 
-    with lzma.LZMAFile(out_file, "w") as f:
+    schema = avro.schema.Parse(open(schema, "rb").read().decode('ascii'))
+
+    with DataFileWriter(open(out_file, "wb"), DatumWriter(), schema, codec='deflate') as writer:
         tar = tarfile.open(in_file)
         total = 0
         chunks = []
@@ -77,12 +83,15 @@ def import_data(src, dest, index, debug):
             if size > MAX_SIZE:
                 for chunk in chunks:
                     try:
-                        f.write(bytes(chunk, 'ascii'))
-                    except IOError as err:
+                        for js in chunk:
+                            writer.append(js)
+                    except Exception as err:
                         print("%03d: err writing file: %s" % (index, err))
                         sys.exit(-1)
                 chunks = []
                 size = 0
+
+
 
         tar.close()
 
@@ -91,8 +100,9 @@ def import_data(src, dest, index, debug):
             sys.stdout.flush()
         for chunk in chunks:
             try:
-                f.write(bytes(chunk, 'ascii'))
-            except IOError as err:
+                for js in chunk:
+                    writer.append(js)
+            except Exception as err:
                 print("%03d: err writing file: %s" % (index, err))
                 sys.exit(-1)
 

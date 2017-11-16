@@ -29,11 +29,7 @@ class FileConverter(Thread):
 
     def run(self):
 
-        if (self.file_index % NUM_THREADS) == 0:
-            verbose = 1
-        else:
-            verbose = 0
-        cmd = ['./convert-to-json.py', self.src, self.dest, "%s" % self.file_index, "%s" % verbose]
+        cmd = ['./convert-to-avro.py', "schema.json", self.src, self.dest, "%s" % self.file_index, "1"]
         try:
             subprocess.check_call(cmd)
         except subprocess.CalledProcessError as err:
@@ -51,23 +47,25 @@ class FileConverter(Thread):
 @click.argument('dest')
 def import_data(src, dest):
 
-    threads = []
+    threads = {}
     last_update_total = 0
     last_update = time()
-    for file_index in range(NUM_FILES):
+    file_index = 0
+    while file_index < NUM_FILES:
         if len(threads) < NUM_THREADS:
             print("Start thread for file %d" % file_index)
             thread = FileConverter(src, dest, file_index)
             thread.start()
-            threads.append(thread)
+            threads[file_index] = thread
+            file_index += 1
             continue
 
         thread_ended = False
         while not thread_ended:
-            for i, thread in enumerate(threads):
-                if thread.is_done():
-                    threads[i].join()
-                    del threads[i]
+            for thread in threads:
+                if threads[thread].is_done():
+                    threads[thread].join()
+                    del threads[thread]
                     thread_ended = True
                     break
 

@@ -1,0 +1,9 @@
+{"type":"record","name":"mlhd","fields":
+    [
+        {"name":"listened_at","type":"int"},
+        {"name":"user_name","type":"string"},
+        {"name":"artist_mbid","type":"string"},
+        {"name":"release_mbid","type":"string"},
+        {"name":"recording_mbid","type":"string"}
+    ]
+}
